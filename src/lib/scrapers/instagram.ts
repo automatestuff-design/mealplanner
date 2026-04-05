@@ -1,4 +1,4 @@
-import { extractIngredientsFromText, extractInstructionsFromText, type ScrapedRecipe } from './utils'
+import { extractIngredientsFromText, extractInstructionsFromText, getIngredientGroups, type ScrapedRecipe } from './utils'
 
 interface InstagramOEmbed {
   title?: string
@@ -44,6 +44,7 @@ export async function scrapeInstagram(url: string): Promise<ScrapedRecipe> {
     description: data?.author_name ? `Imported from Instagram by @${data.author_name}` : 'Imported from Instagram',
     instructions: instructions || 'See the original Instagram post for instructions.',
     ingredients,
+    ingredientGroups: getIngredientGroups(ingredients),
     imageUrl: data?.thumbnail_url,
     sourceUrl: url,
     sourcePlatform: 'instagram',

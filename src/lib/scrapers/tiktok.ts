@@ -1,4 +1,4 @@
-import { extractIngredientsFromText, extractInstructionsFromText, type ScrapedRecipe } from './utils'
+import { extractIngredientsFromText, extractInstructionsFromText, getIngredientGroups, type ScrapedRecipe } from './utils'
 
 interface TikTokOEmbed {
   title?: string
@@ -36,6 +36,7 @@ export async function scrapeTikTok(url: string): Promise<ScrapedRecipe> {
     description: `Imported from TikTok by ${data.author_name ?? 'unknown'}`,
     instructions: instructions || 'See the original TikTok video for instructions.',
     ingredients,
+    ingredientGroups: getIngredientGroups(ingredients),
     imageUrl: data.thumbnail_url,
     sourceUrl: url,
     sourcePlatform: 'tiktok',

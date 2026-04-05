@@ -216,22 +216,77 @@ export function ImportRecipeDialog({ open, onClose }: ImportRecipeDialogProps) {
                 {preview.cookTime && <span>Cook: {preview.cookTime} min</span>}
                 {preview.servings && <span>Serves: {preview.servings}</span>}
                 <span>{preview.ingredients.length} ingredient{preview.ingredients.length !== 1 ? 's' : ''} found</span>
+                {(preview.ingredientGroups?.length ?? 0) > 0 && (
+                  <span>{preview.ingredientGroups.length} section{preview.ingredientGroups.length !== 1 ? 's' : ''}</span>
+                )}
               </div>
 
-              {/* Ingredients preview */}
+              {/* Ingredients preview — grouped */}
               {preview.ingredients.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                     Ingredients
                   </p>
-                  <ul className="text-sm space-y-0.5 max-h-32 overflow-auto">
-                    {preview.ingredients.map((ing, i) => (
-                      <li key={i} className="text-muted-foreground">
-                        {ing.quantity} {ing.unit} <span className="capitalize">{ing.name}</span>
-                        {ing.notes && <span className="text-xs"> ({ing.notes})</span>}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="text-sm max-h-48 overflow-auto space-y-2">
+                    {(preview.ingredientGroups?.length ?? 0) > 0 ? (
+                      // Show grouped ingredients
+                      <>
+                        {/* Ungrouped ingredients first */}
+                        {preview.ingredients.filter((i) => !i.group).length > 0 && (
+                          <ul className="space-y-0.5">
+                            {preview.ingredients.filter((i) => !i.group).map((ing, i) => (
+                              <li key={i} className="text-muted-foreground">
+                                {ing.quantity} {ing.unit}{' '}
+                                <span className="capitalize">{ing.name}</span>
+                                {ing.notes && <span className="text-xs opacity-70"> — {ing.notes}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {/* Grouped sections */}
+                        {preview.ingredientGroups.map((group) => (
+                          <div key={group}>
+                            <p className="text-xs font-semibold text-foreground mb-0.5">{group}</p>
+                            <ul className="space-y-0.5">
+                              {preview.ingredients.filter((i) => i.group === group).map((ing, i) => (
+                                <li key={i} className="text-muted-foreground">
+                                  {ing.quantity} {ing.unit}{' '}
+                                  <span className="capitalize">{ing.name}</span>
+                                  {ing.notes && <span className="text-xs opacity-70"> — {ing.notes}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <ul className="space-y-0.5">
+                        {preview.ingredients.map((ing, i) => (
+                          <li key={i} className="text-muted-foreground">
+                            {ing.quantity} {ing.unit}{' '}
+                            <span className="capitalize">{ing.name}</span>
+                            {ing.notes && <span className="text-xs opacity-70"> — {ing.notes}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Nutrition preview */}
+              {preview.scrapedNutrition?.calories && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                    Nutrition{preview.scrapedNutrition.servingSize ? ` (${preview.scrapedNutrition.servingSize})` : ' per serving'}
+                  </p>
+                  <div className="grid grid-cols-5 gap-1 rounded bg-muted p-2 text-center text-xs">
+                    <div><div className="font-semibold">{preview.scrapedNutrition.calories}</div><div className="text-muted-foreground">kcal</div></div>
+                    {preview.scrapedNutrition.proteinG != null && <div><div className="font-semibold">{preview.scrapedNutrition.proteinG}g</div><div className="text-muted-foreground">protein</div></div>}
+                    {preview.scrapedNutrition.carbsG != null && <div><div className="font-semibold">{preview.scrapedNutrition.carbsG}g</div><div className="text-muted-foreground">carbs</div></div>}
+                    {preview.scrapedNutrition.fatG != null && <div><div className="font-semibold">{preview.scrapedNutrition.fatG}g</div><div className="text-muted-foreground">fat</div></div>}
+                    {preview.scrapedNutrition.fiberG != null && <div><div className="font-semibold">{preview.scrapedNutrition.fiberG}g</div><div className="text-muted-foreground">fiber</div></div>}
+                  </div>
                 </div>
               )}
 

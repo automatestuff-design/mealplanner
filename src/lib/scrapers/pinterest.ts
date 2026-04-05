@@ -99,6 +99,7 @@ export async function scrapePinterest(url: string): Promise<ScrapedRecipe> {
     description: 'Imported from Pinterest. Please fill in the recipe details.',
     instructions: '',
     ingredients: [],
+    ingredientGroups: [],
     imageUrl,
     sourceUrl: resolvedUrl,
     sourcePlatform: 'pinterest',
