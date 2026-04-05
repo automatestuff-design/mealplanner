@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MealSlot } from './MealSlot'
 import { AddMealDialog } from './AddMealDialog'
+import { DayMacroSummary } from './DayMacroSummary'
 import { formatWeekRange, getWeekDays, toISODate, formatDayLabel, getWeekStart, fromISODate } from '@/lib/utils/date'
 import { addMealEntry, removeMealEntry } from '@/lib/api/meal-plans'
 import type { WeeklyPlan, MealType } from '@/types'
@@ -26,6 +27,7 @@ interface WeeklyCalendarProps {
 
 export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyCalendarProps) {
   const [plan, setPlan] = useState<WeeklyPlan | null>(initialPlan)
+  const [selectedDate, setSelectedDate] = useState<string>(toISODate(new Date()))
   const [dialogState, setDialogState] = useState<{
     open: boolean
     date: string
@@ -43,6 +45,7 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
   }
 
   const handleAdd = useCallback((date: string, mealType: MealType) => {
+    setSelectedDate(date)
     setDialogState({ open: true, date, mealType })
   }, [])
 
@@ -56,7 +59,6 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
         recipeId,
         servings,
       })
-      // Reload plan data
       const res = await fetch(`/api/meal-plans?weekStart=${weekStart}`)
       if (res.ok) {
         const updated = await res.json()
@@ -104,21 +106,28 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
       {/* Calendar grid */}
       <div className="overflow-x-auto">
         <div className="min-w-[700px]">
-          {/* Day headers */}
+          {/* Day headers — clicking selects the day for macro summary */}
           <div className="grid grid-cols-[80px_repeat(7,1fr)] gap-1 mb-1">
             <div />
             {days.map((day) => {
+              const dateStr = toISODate(day)
               const label = formatDayLabel(day, today)
-              const isToday = toISODate(day) === toISODate(today)
+              const isToday = dateStr === toISODate(today)
+              const isSelected = dateStr === selectedDate
               return (
-                <div
-                  key={toISODate(day)}
-                  className={`text-center text-sm font-medium py-2 rounded-md ${
-                    isToday ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+                <button
+                  key={dateStr}
+                  onClick={() => setSelectedDate(dateStr)}
+                  className={`text-center text-sm font-medium py-2 rounded-md transition-colors w-full ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground'
+                      : isToday
+                      ? 'bg-primary/20 text-primary'
+                      : 'text-muted-foreground hover:bg-accent'
                   }`}
                 >
                   {label}
-                </div>
+                </button>
               )
             })}
           </div>
@@ -134,10 +143,14 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
               {days.map((day) => {
                 const dateStr = toISODate(day)
                 const entries = plan?.days[dateStr]?.[mealType] ?? []
+                const isSelected = dateStr === selectedDate
                 return (
                   <div
                     key={dateStr}
-                    className="rounded-md border bg-muted/30 p-1 min-h-[90px]"
+                    onClick={() => setSelectedDate(dateStr)}
+                    className={`rounded-md border p-1 min-h-[90px] cursor-pointer transition-colors ${
+                      isSelected ? 'border-primary/40 bg-primary/5' : 'bg-muted/30 hover:bg-muted/50'
+                    }`}
                   >
                     <MealSlot
                       date={dateStr}
@@ -154,6 +167,9 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
         </div>
       </div>
 
+      {/* Daily macro progress for selected day */}
+      <DayMacroSummary plan={plan} selectedDate={selectedDate} />
+
       {/* Empty state */}
       {!plan && (
         <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
@@ -169,6 +185,7 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
           onAdd={handleAddConfirm}
           date={dialogState.date}
           mealType={dialogState.mealType}
+          consumedOnDate={plan ? plan.entries.filter((e) => e.date === dialogState.date) : []}
         />
       )}
     </div>

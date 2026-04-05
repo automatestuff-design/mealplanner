@@ -10,7 +10,10 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import type { MealType, RecipeDetail } from '@/types'
+import { useGoals } from '@/hooks/useGoals'
+import { computeDayNutrition, macroFitScore, fitScoreLabel } from '@/lib/utils/macroFit'
+import { cn } from '@/lib/utils/cn'
+import type { MealType, MealEntryWithRecipe, RecipeDetail } from '@/types'
 
 interface AddMealDialogProps {
   open: boolean
@@ -18,13 +21,23 @@ interface AddMealDialogProps {
   onAdd: (recipeId: string, servings: number) => void
   date: string
   mealType: MealType
+  consumedOnDate: MealEntryWithRecipe[]
 }
 
-export function AddMealDialog({ open, onClose, onAdd, date, mealType }: AddMealDialogProps) {
+export function AddMealDialog({
+  open,
+  onClose,
+  onAdd,
+  date,
+  mealType,
+  consumedOnDate,
+}: AddMealDialogProps) {
   const [search, setSearch] = useState('')
   const [results, setResults] = useState<RecipeDetail[]>([])
   const [loading, setLoading] = useState(false)
   const [servings, setServings] = useState(1)
+
+  const { data: goals } = useGoals()
 
   const handleSearch = async () => {
     if (!search.trim()) return
@@ -52,6 +65,18 @@ export function AddMealDialog({ open, onClose, onAdd, date, mealType }: AddMealD
     timeZone: 'UTC',
   })
 
+  const hasGoals = goals && (goals.calories || goals.proteinG || goals.carbsG || goals.fatG)
+  const consumed = computeDayNutrition(consumedOnDate, date)
+
+  // Sort results by fit score if goals exist
+  const sortedResults = hasGoals
+    ? [...results].sort(
+        (a, b) =>
+          macroFitScore(b.nutrition, consumed, goals!, servings) -
+          macroFitScore(a.nutrition, consumed, goals!, servings)
+      )
+    : results
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg">
@@ -73,36 +98,8 @@ export function AddMealDialog({ open, onClose, onAdd, date, mealType }: AddMealD
             </Button>
           </div>
 
-          {results.length > 0 && (
-            <div className="space-y-2 max-h-72 overflow-auto">
-              {results.map((recipe) => (
-                <div
-                  key={recipe.id}
-                  className="flex items-center justify-between rounded-md border p-3 hover:bg-accent cursor-pointer"
-                  onClick={() => {
-                    onAdd(recipe.id, servings)
-                    onClose()
-                  }}
-                >
-                  <div>
-                    <div className="font-medium text-sm">{recipe.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {recipe.nutrition.calories} kcal/serving
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {results.length === 0 && search && !loading && (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No recipes found. Try a different search.
-            </p>
-          )}
-
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Servings:</label>
+            <label className="text-sm font-medium whitespace-nowrap">Servings:</label>
             <Input
               type="number"
               value={servings}
@@ -112,6 +109,54 @@ export function AddMealDialog({ open, onClose, onAdd, date, mealType }: AddMealD
               step={0.5}
             />
           </div>
+
+          {sortedResults.length > 0 && (
+            <div className="space-y-2 max-h-72 overflow-auto">
+              {hasGoals && (
+                <p className="text-xs text-muted-foreground px-1">
+                  Sorted by how well each recipe fills your remaining daily goals
+                </p>
+              )}
+              {sortedResults.map((recipe) => {
+                const score = hasGoals
+                  ? macroFitScore(recipe.nutrition, consumed, goals!, servings)
+                  : null
+                const fit = score !== null ? fitScoreLabel(score) : null
+
+                return (
+                  <div
+                    key={recipe.id}
+                    className={cn(
+                      'flex items-center justify-between rounded-md border p-3 hover:bg-accent cursor-pointer transition-colors',
+                      fit && fit.bgColor
+                    )}
+                    onClick={() => {
+                      onAdd(recipe.id, servings)
+                      onClose()
+                    }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{recipe.title}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {recipe.nutrition.calories * servings} kcal · {recipe.nutrition.proteinG * servings}g protein
+                      </div>
+                    </div>
+                    {fit && score !== null && (
+                      <div className={cn('ml-3 shrink-0 text-xs font-medium', fit.color)}>
+                        {fit.label}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {sortedResults.length === 0 && search && !loading && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No recipes found. Try a different search.
+            </p>
+          )}
         </div>
       </DialogContent>
     </Dialog>

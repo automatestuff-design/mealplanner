@@ -1,3 +1,14 @@
+// ─── User Goals ───────────────────────────────────────────────────────────────
+
+export type UserGoals = {
+  id?: string
+  calories: number | null
+  proteinG: number | null
+  carbsG: number | null
+  fatG: number | null
+  fiberG: number | null
+}
+
 // ─── Nutrition ────────────────────────────────────────────────────────────────
 
 export type NutritionSummary = {

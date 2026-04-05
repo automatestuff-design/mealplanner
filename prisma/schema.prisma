@@ -22,6 +22,7 @@ model User {
   mealPlans MealPlan[]
   accounts  Account[]
   sessions  Session[]
+  goals     UserGoals?
 }
 
 model Account {
@@ -57,6 +58,21 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// ─── User Goals ───────────────────────────────────────────────────────────────
+
+model UserGoals {
+  id        String   @id @default(cuid())
+  calories  Int?     // daily kcal target
+  proteinG  Int?     // grams
+  carbsG    Int?     // grams
+  fatG      Int?     // grams
+  fiberG    Int?     // grams
+  updatedAt DateTime @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ─── Recipes ──────────────────────────────────────────────────────────────────
