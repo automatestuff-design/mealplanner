@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
 import { RecipeCard } from '@/components/recipes/RecipeCard'
 import { calculateRecipeNutrition } from '@/lib/utils/nutrition'
+import { ImportButton } from './ImportButton'
 
 export default async function RecipesPage({
   searchParams,
@@ -85,12 +86,15 @@ export default async function RecipesPage({
           <p className="text-sm text-muted-foreground">
             {recipes.length} recipe{recipes.length !== 1 ? 's' : ''}
           </p>
-          <Button asChild>
-            <Link href="/recipes/new">
-              <Plus className="h-4 w-4" />
-              New Recipe
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <ImportButton />
+            <Button asChild>
+              <Link href="/recipes/new">
+                <Plus className="h-4 w-4" />
+                New Recipe
+              </Link>
+            </Button>
+          </div>
         </div>
 
         {recipesWithNutrition.length === 0 ? (
