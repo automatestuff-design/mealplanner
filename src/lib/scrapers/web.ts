@@ -99,14 +99,46 @@ function extractFromMicrodata(html: string): Partial<SchemaRecipe> | null {
   }
 }
 
+const ERROR_MESSAGES: Record<number, string> = {
+  401: 'This page requires login. Try copying the recipe URL after signing in on that site.',
+  402: 'This site requires a subscription or payment to access recipes.',
+  403: 'This site is blocking automated access. Try a different recipe site.',
+  404: 'Page not found. Double-check the URL.',
+  429: 'This site is rate-limiting requests. Wait a minute and try again.',
+  500: 'The recipe site is having server issues. Try again later.',
+  503: 'The recipe site is temporarily unavailable. Try again later.',
+}
+
+// Additional headers that help bypass basic bot detection
+const EXTENDED_HEADERS = {
+  ...FETCH_HEADERS,
+  'Cache-Control': 'no-cache',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'none',
+  'Upgrade-Insecure-Requests': '1',
+}
+
 export async function scrapeWebRecipe(url: string): Promise<ScrapedRecipe> {
-  const res = await fetch(url, {
-    headers: FETCH_HEADERS,
+  let res = await fetch(url, {
+    headers: EXTENDED_HEADERS,
     redirect: 'follow',
     signal: AbortSignal.timeout(15000),
   })
 
-  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`)
+  // Retry once with minimal headers if blocked
+  if (!res.ok && (res.status === 402 || res.status === 403)) {
+    res = await fetch(url, {
+      headers: { 'User-Agent': FETCH_HEADERS['User-Agent'] },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(15000),
+    })
+  }
+
+  if (!res.ok) {
+    const friendly = ERROR_MESSAGES[res.status]
+    throw new Error(friendly ?? `This site returned an error (HTTP ${res.status}). It may be blocking imports.`)
+  }
   const html = await res.text()
 
   // 1. Try JSON-LD
