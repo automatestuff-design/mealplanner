@@ -57,15 +57,44 @@ interface HowToSection {
 // ─── JSON-LD parsers ──────────────────────────────────────────────────────────
 
 /**
+ * Strip HTML tags and decode common HTML entities from a string.
+ */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+/**
  * Normalize recipeInstructions which can be:
- * - A plain string
+ * - A plain string (possibly HTML)
  * - An array of strings
  * - An array of HowToStep objects
  * - An array of HowToSection objects (each containing HowToStep items)
  */
 function normalizeInstructions(raw: unknown): string {
   if (!raw) return ''
-  if (typeof raw === 'string') return raw
+  if (typeof raw === 'string') {
+    // Some sites embed HTML in the string — strip tags and number the sentences/lines
+    const clean = stripHtml(raw)
+    // If it already has numbered steps, return as-is
+    if (/^\s*\d+[\.\)]/.test(clean)) return clean
+    // Split on sentence boundaries or newlines and number them
+    const sentences = clean
+      .split(/\.\s+|\n+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 10)
+    return sentences.length > 1
+      ? sentences.map((s, i) => `${i + 1}. ${s.endsWith('.') ? s : s + '.'}`).join('\n')
+      : clean
+  }
 
   if (!Array.isArray(raw)) return ''
 
@@ -87,18 +116,18 @@ function normalizeInstructions(raw: unknown): string {
       // Section with a name heading and nested steps
       if (typed.name) lines.push(`\n${typed.name}:`)
       for (const step of typed.itemListElement) {
-        const text = step.text ?? step.name
-        if (text) {
-          lines.push(`${stepNum}. ${text.trim()}`)
-          stepNum++
+        const raw = step.text ?? step.name
+        if (raw) {
+          const text = stripHtml(raw).trim()
+          if (text) { lines.push(`${stepNum}. ${text}`); stepNum++ }
         }
       }
     } else {
-      // HowToStep or bare object
-      const text = typed.text ?? typed.name
-      if (text) {
-        lines.push(`${stepNum}. ${text.trim()}`)
-        stepNum++
+      // HowToStep or bare object — strip any embedded HTML
+      const raw = typed.text ?? typed.name
+      if (raw) {
+        const text = stripHtml(raw).trim()
+        if (text) { lines.push(`${stepNum}. ${text}`); stepNum++ }
       }
     }
   }
@@ -257,16 +286,54 @@ function extractIngredientsFromHtml($: CheerioAPI): ScrapedIngredient[] {
 }
 
 /**
+ * Get the text of a list item without including text from nested lists.
+ * WPRM wraps steps in li.wprm-recipe-instruction > div.wprm-recipe-instruction-text
+ * and also has group li elements that nest the step lis — we must skip those.
+ */
+function liText($: CheerioAPI, el: ReturnType<typeof $>[number]): string {
+  const $el = $(el)
+  // If this li contains a nested ol/ul, it's a group container — skip it
+  if ($el.find('ol, ul').length > 0) return ''
+  // Prefer the WPRM instruction-text div if present
+  const textDiv = $el.find('[class*="instruction-text"], [class*="step-text"]').first()
+  if (textDiv.length) return textDiv.text().trim().replace(/\s+/g, ' ')
+  return $el.text().trim().replace(/\s+/g, ' ')
+}
+
+/**
  * Extract instructions from HTML, handling section headings within instructions.
  */
 function extractInstructionsFromHtml($: CheerioAPI): string {
+  // ── 1. WPRM-specific: li.wprm-recipe-instruction ────────────────────────────
+  const wprmItems = $('li.wprm-recipe-instruction')
+  if (wprmItems.length > 0) {
+    const lines: string[] = []
+    wprmItems.each((i, el) => {
+      const text = liText($, el)
+      if (text && text.length > 4) lines.push(`${i + 1}. ${text}`)
+    })
+    if (lines.length > 0) return lines.join('\n')
+  }
+
+  // ── 2. Tasty Recipes plugin ──────────────────────────────────────────────────
+  const tastyContainer = $('.tasty-recipes-instructions-body, .tasty-recipes-instructions').first()
+  if (tastyContainer.length) {
+    const lines: string[] = []
+    let stepNum = 1
+    tastyContainer.find('li').each((_, el) => {
+      const text = liText($, el)
+      if (text && text.length > 4) { lines.push(`${stepNum}. ${text}`); stepNum++ }
+    })
+    if (lines.length > 0) return lines.join('\n')
+  }
+
+  // ── 3. Generic CSS selectors ────────────────────────────────────────────────
   const containerSelectors = [
-    '[class*="instruction"]:not(li):not(span)',
+    '.wprm-recipe-instructions-container',
+    '[class*="instruction"]:not(li):not(span):not(div > ol):not(div > ul)',
     '[class*="direction"]:not(li):not(span)',
     '[id*="instruction"]',
     '[id*="direction"]',
-    '.wprm-recipe-instructions',
-    '.tasty-recipes-instructions-body',
     '.recipe-directions',
     '[class*="steps"]:not(li)',
     '[class*="method"]:not(li)',
@@ -278,20 +345,17 @@ function extractInstructionsFromHtml($: CheerioAPI): string {
 
     const lines: string[] = []
     let stepNum = 1
-    let currentSection: string | undefined
 
-    container.find('li, p, [class*="step"]').each((_, el) => {
-      const text = $(el).text().trim().replace(/\s+/g, ' ')
-      if (!text || text.length < 5) return
-
-      // Look for a bold/heading child that IS the whole text (section label)
-      const boldChild = $(el).find('strong, b, em').first()
-      if (boldChild.length && boldChild.text().trim() === text && text.length < 80) {
-        currentSection = text
-        return
+    // Only process leaf li/p elements (those without nested lists)
+    container.find('li, p').each((_, el) => {
+      const tag = ($(el).prop('tagName') as string).toLowerCase()
+      let text: string
+      if (tag === 'li') {
+        text = liText($, el)
+      } else {
+        text = $(el).text().trim().replace(/\s+/g, ' ')
       }
-
-      const prefix = currentSection ? '' : ''
+      if (!text || text.length < 5) return
       lines.push(`${stepNum}. ${text}`)
       stepNum++
     })
@@ -299,12 +363,17 @@ function extractInstructionsFromHtml($: CheerioAPI): string {
     if (lines.length > 0) return lines.join('\n')
   }
 
-  // Fallback: find an Instructions heading and collect what follows
+  // ── 4. Heading-based fallback ────────────────────────────────────────────────
   let found = ''
   $('h2, h3, h4').each((_, heading) => {
     if (found) return
     const headingText = $(heading).text().toLowerCase().trim()
-    if (!headingText.includes('instruction') && !headingText.includes('direction') && !headingText.includes('method')) return
+    if (
+      !headingText.includes('instruction') &&
+      !headingText.includes('direction') &&
+      !headingText.includes('method') &&
+      !headingText.includes('how to')
+    ) return
 
     const lines: string[] = []
     let stepNum = 1
@@ -314,8 +383,8 @@ function extractInstructionsFromHtml($: CheerioAPI): string {
       const tag = (el.prop('tagName') as string | '').toLowerCase()
       if (tag === 'ol' || tag === 'ul') {
         el.find('li').each((_, li) => {
-          const text = $(li).text().trim().replace(/\s+/g, ' ')
-          if (text) { lines.push(`${stepNum}. ${text}`); stepNum++ }
+          const text = liText($, li)
+          if (text && text.length > 4) { lines.push(`${stepNum}. ${text}`); stepNum++ }
         })
       } else if (tag === 'p') {
         const text = el.text().trim()
@@ -388,9 +457,13 @@ const ERROR_MESSAGES: Record<number, string> = {
 const EXTENDED_HEADERS = {
   ...FETCH_HEADERS,
   'Cache-Control': 'no-cache',
+  'Sec-CH-UA': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  'Sec-CH-UA-Mobile': '?0',
+  'Sec-CH-UA-Platform': '"Windows"',
   'Sec-Fetch-Dest': 'document',
   'Sec-Fetch-Mode': 'navigate',
   'Sec-Fetch-Site': 'none',
+  'Sec-Fetch-User': '?1',
   'Upgrade-Insecure-Requests': '1',
 }
 
