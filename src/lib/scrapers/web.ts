@@ -199,15 +199,93 @@ function extractFromJsonLd(html: string): SchemaRecipe | null {
 // ─── HTML fallback extractors ─────────────────────────────────────────────────
 
 /**
+ * Extract ingredients using WPRM's structured markup.
+ * Groups come from li.wprm-recipe-ingredient-group >
+ *   span.wprm-recipe-ingredient-group-name
+ * Individual ingredients come from li.wprm-recipe-ingredient with
+ *   separate amount/unit/name/notes spans.
+ */
+function extractWprmIngredients($: CheerioAPI): ScrapedIngredient[] {
+  const groups = $('li.wprm-recipe-ingredient-group')
+  if (!groups.length) return []
+
+  const result: ScrapedIngredient[] = []
+
+  groups.each((_, groupEl) => {
+    const groupName = $(groupEl)
+      .find('.wprm-recipe-ingredient-group-name')
+      .first()
+      .text()
+      .trim()
+      .replace(/:$/, '') || undefined
+
+    $(groupEl)
+      .find('li.wprm-recipe-ingredient')
+      .each((_, ingEl) => {
+        const amount = $(ingEl).find('.wprm-recipe-ingredient-amount').text().trim()
+        const unit = $(ingEl).find('.wprm-recipe-ingredient-unit').text().trim()
+        const name = $(ingEl).find('.wprm-recipe-ingredient-name').text().trim()
+        const notes = $(ingEl).find('.wprm-recipe-ingredient-notes').text().trim().replace(/^\(|\)$/g, '')
+
+        if (!name) return
+
+        // Parse amount — handle fractions like "1 ½"
+        const fractionMap: Record<string, number> = {
+          '½': 0.5, '⅓': 0.333, '⅔': 0.667, '¼': 0.25, '¾': 0.75,
+          '⅛': 0.125, '1/2': 0.5, '1/3': 0.333, '2/3': 0.667,
+          '1/4': 0.25, '3/4': 0.75,
+        }
+        let quantityStr = amount
+        for (const [frac, val] of Object.entries(fractionMap)) {
+          quantityStr = quantityStr.replace(frac, val.toString())
+        }
+        const parts = quantityStr.trim().split(/\s+/)
+        const quantity = parts.reduce((sum, p) => sum + (parseFloat(p) || 0), 0) || 1
+
+        result.push({
+          name: name.toLowerCase().trim(),
+          quantity,
+          unit: unit.toLowerCase() || 'whole',
+          notes: notes || undefined,
+          group: groupName,
+        })
+      })
+  })
+
+  return result
+}
+
+/**
  * Extract ingredients from HTML, respecting section headings.
  * Tries common CSS selectors used by popular recipe plugins.
  */
 function extractIngredientsFromHtml($: CheerioAPI): ScrapedIngredient[] {
+  // ── 1. WPRM-specific structured extraction ──────────────────────────────────
+  const wprmResult = extractWprmIngredients($)
+  if (wprmResult.length > 0) return wprmResult
+
+  // ── 2. Tasty Recipes plugin ──────────────────────────────────────────────────
+  const tastyContainer = $('.tasty-recipes-ingredients').first()
+  if (tastyContainer.length) {
+    const result: ScrapedIngredient[] = []
+    let currentGroup: string | undefined
+    tastyContainer.find('h4, li').each((_, el) => {
+      const tag = ($(el).prop('tagName') as string).toLowerCase()
+      const text = $(el).text().trim().replace(/^[▢□✓✗•·–\-]\s*/u, '').replace(/\s+/g, ' ')
+      if (!text) return
+      if (tag === 'h4') {
+        currentGroup = text.replace(/:$/, '').trim()
+      } else if (tag === 'li' && !isIngredientHeading(text)) {
+        result.push({ ...parseIngredientString(text), group: currentGroup })
+      }
+    })
+    if (result.length > 0) return result
+  }
+
+  // ── 3. Generic CSS container selectors ─────────────────────────────────────
   const containerSelectors = [
     '[class*="ingredient"]:not(li):not(span)',
     '[id*="ingredient"]',
-    '.wprm-recipe-ingredient-container',
-    '.tasty-recipes-ingredients',
     '.recipe-ingredients',
     '[class*="Ingredient"]:not(li):not(span)',
   ]
@@ -219,19 +297,24 @@ function extractIngredientsFromHtml($: CheerioAPI): ScrapedIngredient[] {
     const result: ScrapedIngredient[] = []
     let currentGroup: string | undefined
 
-    // Walk direct children looking for headings and list items
-    container.find('h2, h3, h4, strong, b, li, p, [class*="ingredient-group"]').each((_, el) => {
+    // Walk children looking for group-name spans/headings, and ingredient list items.
+    // Skip li elements that contain nested lists (they are group wrappers).
+    container.find('h2, h3, h4, [class*="group-name"], strong, b, li, p').each((_, el) => {
       const tag = ($(el).prop('tagName') as string | undefined)?.toLowerCase() ?? ''
       const text = $(el).text().trim().replace(/\s+/g, ' ')
       if (!text) return
 
+      // Skip group-wrapper li elements (contain a nested ul/ol)
+      if (tag === 'li' && $(el).find('ul, ol').length > 0) return
+
       const isHeadingTag = ['h2', 'h3', 'h4'].includes(tag)
+      const isGroupSpan = $(el).attr('class')?.includes('group-name') ?? false
       const isBoldOnly =
         ['strong', 'b'].includes(tag) &&
         $(el).closest('li').length === 0 &&
         text.length < 80
 
-      if (isHeadingTag || isBoldOnly || isIngredientHeading(text)) {
+      if (isHeadingTag || isGroupSpan || isBoldOnly || isIngredientHeading(text)) {
         currentGroup = text.replace(/:$/, '').trim()
         return
       }
@@ -247,14 +330,13 @@ function extractIngredientsFromHtml($: CheerioAPI): ScrapedIngredient[] {
     if (result.length > 0) return result
   }
 
-  // Last resort: find any list that lives near an "Ingredients" heading
+  // ── 4. Heading-based fallback ────────────────────────────────────────────────
   let found: ScrapedIngredient[] = []
   $('h2, h3, h4').each((_, heading) => {
     if (found.length > 0) return
     const headingText = $(heading).text().toLowerCase().trim()
     if (!headingText.includes('ingredient')) return
 
-    // Gather list items that follow this heading
     let currentGroup: string | undefined
     const items: ScrapedIngredient[] = []
     let el = $(heading).next()
@@ -263,7 +345,9 @@ function extractIngredientsFromHtml($: CheerioAPI): ScrapedIngredient[] {
       const tag = (el.prop('tagName') as string | '').toLowerCase()
       if (tag === 'ul' || tag === 'ol') {
         el.find('li').each((_, li) => {
-          const text = $(li).text().trim().replace(/^[▢□✓•]\s*/u, '')
+          // Skip wrapper li elements
+          if ($(li).find('ul, ol').length > 0) return
+          const text = $(li).text().trim().replace(/^[▢□✓•]\s*/u, '').replace(/\s+/g, ' ')
           if (isIngredientHeading(text)) {
             currentGroup = text.replace(/:$/, '').trim()
           } else if (text) {
