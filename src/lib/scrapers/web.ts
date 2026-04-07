@@ -582,11 +582,21 @@ export async function scrapeWebRecipe(url: string): Promise<ScrapedRecipe> {
   const schema = extractFromJsonLd(html)
 
   if (schema?.name) {
-    const ingredients = parseIngredientList(schema.recipeIngredient ?? [])
+    const jsonLdIngredients = parseIngredientList(schema.recipeIngredient ?? [])
 
-    // If JSON-LD gave us no ingredients, fall back to HTML extraction
-    const finalIngredients =
-      ingredients.length > 0 ? ingredients : extractIngredientsFromHtml($)
+    // Prefer JSON-LD ingredients, but if they have no groups, try HTML —
+    // some plugins (WPRM) omit section headings from the JSON-LD flat array
+    // even though they structure them clearly in the HTML.
+    let finalIngredients = jsonLdIngredients.length > 0
+      ? jsonLdIngredients
+      : extractIngredientsFromHtml($)
+
+    if (jsonLdIngredients.length > 0 && getIngredientGroups(jsonLdIngredients).length === 0) {
+      const htmlIngredients = extractIngredientsFromHtml($)
+      if (getIngredientGroups(htmlIngredients).length > 0) {
+        finalIngredients = htmlIngredients
+      }
+    }
 
     const instructions = normalizeInstructions(schema.recipeInstructions) || extractInstructionsFromHtml($)
     const nutrition = extractNutritionFromSchema(schema.nutrition) ?? extractNutritionFromHtml($)
