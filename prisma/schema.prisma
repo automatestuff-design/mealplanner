@@ -91,6 +91,14 @@ model Recipe {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Scraped nutrition (per serving, from import)
+  scrapedCalories    Int?
+  scrapedProteinG    Float?
+  scrapedCarbsG      Float?
+  scrapedFatG        Float?
+  scrapedFiberG      Float?
+  scrapedServingSize String?
+
   authorId    String
   author      User               @relation(fields: [authorId], references: [id])
   ingredients RecipeIngredient[]
@@ -104,6 +112,7 @@ model RecipeIngredient {
   quantity  Float
   unit      String
   notes     String?
+  group     String? // ingredient section heading e.g. "For the Banana Topping"
   sortOrder Int     @default(0)
 
   recipeId     String

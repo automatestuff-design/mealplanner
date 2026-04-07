@@ -97,28 +97,49 @@ export default async function RecipeDetailPage({
         {/* Nutrition */}
         <div className="mb-6">
           <h2 className="font-semibold mb-2">Nutrition (per serving)</h2>
-          <NutritionBadge nutrition={nutrition} />
+          {recipe.scrapedCalories ? (
+            <div className="grid grid-cols-5 gap-2 rounded-lg bg-muted p-3 text-center text-sm">
+              <div><div className="font-semibold">{recipe.scrapedCalories}</div><div className="text-xs text-muted-foreground">kcal</div></div>
+              {recipe.scrapedProteinG != null && <div><div className="font-semibold">{recipe.scrapedProteinG}g</div><div className="text-xs text-muted-foreground">protein</div></div>}
+              {recipe.scrapedCarbsG != null && <div><div className="font-semibold">{recipe.scrapedCarbsG}g</div><div className="text-xs text-muted-foreground">carbs</div></div>}
+              {recipe.scrapedFatG != null && <div><div className="font-semibold">{recipe.scrapedFatG}g</div><div className="text-xs text-muted-foreground">fat</div></div>}
+              {recipe.scrapedFiberG != null && <div><div className="font-semibold">{recipe.scrapedFiberG}g</div><div className="text-xs text-muted-foreground">fiber</div></div>}
+            </div>
+          ) : (
+            <NutritionBadge nutrition={nutrition} />
+          )}
         </div>
 
         {/* Ingredients */}
         <div className="mb-6">
           <h2 className="font-semibold mb-3">Ingredients</h2>
-          <ul className="space-y-2">
-            {recipe.ingredients.map((ri) => (
+          {(() => {
+            const groups = Array.from(new Set(recipe.ingredients.map((i) => i.group).filter(Boolean))) as string[]
+            const ungrouped = recipe.ingredients.filter((i) => !i.group)
+            const renderItem = (ri: typeof recipe.ingredients[number]) => (
               <li key={ri.id} className="flex items-start gap-2 text-sm">
-                <span className="text-muted-foreground">•</span>
+                <span className="text-muted-foreground mt-0.5">•</span>
                 <span>
-                  <span className="font-medium">
-                    {ri.quantity} {ri.unit}
-                  </span>{' '}
+                  <span className="font-medium">{ri.quantity} {ri.unit}</span>{' '}
                   <span className="capitalize">{ri.ingredient.name}</span>
-                  {ri.notes && (
-                    <span className="text-muted-foreground"> ({ri.notes})</span>
-                  )}
+                  {ri.notes && <span className="text-muted-foreground"> ({ri.notes})</span>}
                 </span>
               </li>
-            ))}
-          </ul>
+            )
+            return (
+              <div className="space-y-4">
+                {ungrouped.length > 0 && <ul className="space-y-2">{ungrouped.map(renderItem)}</ul>}
+                {groups.map((group) => (
+                  <div key={group}>
+                    <p className="text-sm font-semibold mb-2">{group}</p>
+                    <ul className="space-y-2">
+                      {recipe.ingredients.filter((i) => i.group === group).map(renderItem)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
 
         {/* Instructions */}

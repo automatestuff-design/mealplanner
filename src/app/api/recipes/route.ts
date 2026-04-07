@@ -16,6 +16,12 @@ const RECIPE_SELECT = {
   imageUrl: true,
   tags: true,
   isPublic: true,
+  scrapedCalories: true,
+  scrapedProteinG: true,
+  scrapedCarbsG: true,
+  scrapedFatG: true,
+  scrapedFiberG: true,
+  scrapedServingSize: true,
   createdAt: true,
   updatedAt: true,
   author: { select: { id: true, name: true, image: true } },
@@ -26,6 +32,7 @@ const RECIPE_SELECT = {
       quantity: true,
       unit: true,
       notes: true,
+      group: true,
       sortOrder: true,
       ingredient: {
         select: {
@@ -167,6 +174,7 @@ export async function POST(req: Request) {
             quantity: ing.quantity,
             unit: ing.unit,
             notes: ing.notes,
+            group: ing.group,
             sortOrder: idx,
             ingredientId: ingredientRecords[idx].id,
           })),

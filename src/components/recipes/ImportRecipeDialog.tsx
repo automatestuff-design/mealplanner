@@ -83,6 +83,7 @@ export function ImportRecipeDialog({ open, onClose }: ImportRecipeDialogProps) {
             quantity: ing.quantity,
             unit: ing.unit,
             notes: ing.notes,
+            group: ing.group,
           }))
         : [{ ingredientId: '', ingredientName: 'See recipe source', quantity: 1, unit: 'whole' }]
 
@@ -97,6 +98,12 @@ export function ImportRecipeDialog({ open, onClose }: ImportRecipeDialogProps) {
         tags: [preview.sourcePlatform],
         isPublic: false,
         ingredients,
+        scrapedCalories: preview.scrapedNutrition?.calories ?? null,
+        scrapedProteinG: preview.scrapedNutrition?.proteinG ?? null,
+        scrapedCarbsG: preview.scrapedNutrition?.carbsG ?? null,
+        scrapedFatG: preview.scrapedNutrition?.fatG ?? null,
+        scrapedFiberG: preview.scrapedNutrition?.fiberG ?? null,
+        scrapedServingSize: preview.scrapedNutrition?.servingSize ?? null,
       })
 
       setSaved(true)

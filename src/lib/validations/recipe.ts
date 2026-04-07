@@ -6,6 +6,7 @@ export const recipeIngredientSchema = z.object({
   quantity: z.number().positive('Quantity must be positive'),
   unit: z.string().min(1, 'Unit is required'),
   notes: z.string().optional(),
+  group: z.string().optional(),
 })
 
 export const recipeSchema = z.object({
@@ -19,6 +20,12 @@ export const recipeSchema = z.object({
   tags: z.array(z.string()).default([]),
   isPublic: z.boolean().default(false),
   ingredients: z.array(recipeIngredientSchema).min(1, 'At least one ingredient is required'),
+  scrapedCalories: z.number().int().optional().nullable(),
+  scrapedProteinG: z.number().optional().nullable(),
+  scrapedCarbsG: z.number().optional().nullable(),
+  scrapedFatG: z.number().optional().nullable(),
+  scrapedFiberG: z.number().optional().nullable(),
+  scrapedServingSize: z.string().optional().nullable(),
 })
 
 export const updateRecipeSchema = recipeSchema.partial()

@@ -39,6 +39,7 @@ export type RecipeIngredientWithDetail = {
   quantity: number
   unit: string
   notes: string | null
+  group: string | null
   sortOrder: number
   ingredient: IngredientSummary
 }
@@ -56,6 +57,12 @@ export type RecipeDetail = {
   imageUrl: string | null
   tags: string[]
   isPublic: boolean
+  scrapedCalories: number | null
+  scrapedProteinG: number | null
+  scrapedCarbsG: number | null
+  scrapedFatG: number | null
+  scrapedFiberG: number | null
+  scrapedServingSize: string | null
   createdAt: string
   updatedAt: string
   author: {
