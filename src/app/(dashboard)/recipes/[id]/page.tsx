@@ -122,16 +122,29 @@ export default async function RecipeDetailPage({
         </div>
 
         {/* Instructions */}
-        <div>
-          <h2 className="font-semibold mb-3">Instructions</h2>
-          <div className="prose prose-sm max-w-none text-sm">
-            {recipe.instructions.split('\n').map((step, idx) => (
-              <p key={idx} className="mb-2 text-foreground">
-                {step}
-              </p>
-            ))}
+        {recipe.instructions && (
+          <div>
+            <h2 className="font-semibold mb-3">Instructions</h2>
+            <ol className="space-y-3 text-sm">
+              {recipe.instructions
+                .split('\n')
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .map((step, idx) => {
+                  // Strip leading "1. " numbering if present — we render our own counter
+                  const text = step.replace(/^\d+\.\s*/, '')
+                  return (
+                    <li key={idx} className="flex gap-3">
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <span className="text-foreground leading-relaxed">{text}</span>
+                    </li>
+                  )
+                })}
+            </ol>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

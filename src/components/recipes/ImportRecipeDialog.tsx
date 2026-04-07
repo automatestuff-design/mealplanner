@@ -290,6 +290,20 @@ export function ImportRecipeDialog({ open, onClose }: ImportRecipeDialogProps) {
                 </div>
               )}
 
+              {/* Instructions preview */}
+              {preview.instructions && preview.instructions.length > 0 && !preview.instructions.startsWith('See original') && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                    Instructions
+                  </p>
+                  <ol className="text-sm text-muted-foreground space-y-1 max-h-48 overflow-auto">
+                    {preview.instructions.split('\n').filter(Boolean).map((step, i) => (
+                      <li key={i} className="leading-snug">{step}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
               {/* Raw text for low confidence */}
               {preview.confidence === 'low' && preview.rawText && (
                 <div>
