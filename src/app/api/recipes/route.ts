@@ -130,7 +130,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 })
     }
 
-    const { ingredients, ...recipeData } = parsed.data
+    const { ingredients: rawIngredients, ...recipeData } = parsed.data
+
+    // Deduplicate by name — RecipeIngredient has @@unique([recipeId, ingredientId]).
+    // The same ingredient in two sections (e.g. vanilla in batter AND topping)
+    // would map to one Ingredient row and violate that constraint. Merge by summing qty.
+    const seen = new Map<string, typeof rawIngredients[number]>()
+    for (const ing of rawIngredients) {
+      const key = ing.ingredientName.toLowerCase().trim()
+      const existing = seen.get(key)
+      if (existing) {
+        existing.quantity += ing.quantity
+      } else {
+        seen.set(key, { ...ing })
+      }
+    }
+    const ingredients = Array.from(seen.values())
 
     // Upsert ingredients by name
     const ingredientRecords = await Promise.all(
@@ -161,7 +176,8 @@ export async function POST(req: Request) {
     })
 
     return NextResponse.json(toRecipeDetail(recipe), { status: 201 })
-  } catch {
+  } catch (err) {
+    console.error('[POST /api/recipes]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
