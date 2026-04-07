@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import Link from 'next/link'
+import { ChevronLeft, ChevronRight, ShoppingCart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MealSlot } from './MealSlot'
 import { AddMealDialog } from './AddMealDialog'
 import { DayMacroSummary } from './DayMacroSummary'
 import { formatWeekRange, getWeekDays, toISODate, formatDayLabel, getWeekStart, fromISODate } from '@/lib/utils/date'
-import { addMealEntry, removeMealEntry } from '@/lib/api/meal-plans'
+import { addMealEntry, createMealPlan, removeMealEntry } from '@/lib/api/meal-plans'
 import type { WeeklyPlan, MealType } from '@/types'
 
 const MEAL_TYPES: MealType[] = ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK']
@@ -50,10 +51,17 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
   }, [])
 
   const handleAddConfirm = async (recipeId: string, servings: number) => {
-    if (!dialogState || !plan) return
+    if (!dialogState) return
 
     try {
-      await addMealEntry(plan.id, {
+      // Create the meal plan for this week on first use
+      let activePlan = plan
+      if (!activePlan) {
+        activePlan = await createMealPlan({ weekStart })
+        setPlan(activePlan)
+      }
+
+      await addMealEntry(activePlan.id, {
         date: dialogState.date,
         mealType: dialogState.mealType,
         recipeId,
@@ -98,9 +106,19 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <span className="font-medium">{formatWeekRange(weekStartDate)}</span>
-        <Button variant="outline" size="icon" onClick={() => navigateWeek(1)}>
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {plan && plan.entries.length > 0 && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/grocery-list?planId=${plan.id}`}>
+                <ShoppingCart className="h-4 w-4 mr-1" />
+                Grocery List
+              </Link>
+            </Button>
+          )}
+          <Button variant="outline" size="icon" onClick={() => navigateWeek(1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Calendar grid */}

@@ -1,3 +1,5 @@
+import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { Header } from '@/components/layout/Header'
@@ -123,22 +125,48 @@ export default async function GroceryListPage({
   )
 
   const totalItems = groceryList?.sections.reduce((sum, s) => sum + s.items.length, 0) ?? 0
+  const activePlanId = params.planId ?? plans[0]?.id
 
   return (
     <div>
       <Header title="Grocery List" />
       <div className="p-6 max-w-2xl">
+        <div className="mb-4 flex items-center gap-2">
+          <Link
+            href={groceryList?.weekStart ? `/planner?week=${groceryList.weekStart}` : '/planner'}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back to Planner
+          </Link>
+        </div>
+
         <div className="mb-6 flex items-center justify-between">
-          <GroceryListSelector plans={plans} currentPlanId={params.planId ?? plans[0]?.id} />
+          <GroceryListSelector plans={plans} currentPlanId={activePlanId} />
+          {totalItems > 0 && (
+            <span className="text-sm text-muted-foreground">{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
+          )}
         </div>
 
         {groceryList && groceryList.sections.length > 0 ? (
           <GroceryList groceryList={groceryList} />
         ) : (
           <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-            {plans.length === 0
-              ? 'No meal plans yet. Create a meal plan first.'
-              : 'No ingredients in this meal plan.'}
+            {plans.length === 0 ? (
+              <>
+                No meal plans yet.{' '}
+                <Link href="/planner" className="text-primary hover:underline">Go to the Planner</Link>
+                {' '}to add recipes.
+              </>
+            ) : (
+              <>
+                No recipes in this meal plan.{' '}
+                <Link href={`/planner?week=${groceryList?.weekStart ?? ''}`} className="text-primary hover:underline">
+                  Add meals to the planner
+                </Link>
+                {' '}to build your list.
+              </>
+            )}
           </div>
         )}
       </div>
