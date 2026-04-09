@@ -18,11 +18,13 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  recipes   Recipe[]
-  mealPlans MealPlan[]
-  accounts  Account[]
-  sessions  Session[]
-  goals     UserGoals?
+  recipes            Recipe[]
+  mealPlans          MealPlan[]
+  accounts           Account[]
+  sessions           Session[]
+  goals              UserGoals?
+  activityConnection ActivityConnection?
+  dailyActivities    DailyActivity[]
 }
 
 model Account {
@@ -178,4 +180,38 @@ enum MealType {
   LUNCH
   DINNER
   SNACK
+}
+
+// ─── Activity Tracking (Garmin via Terra API) ─────────────────────────────────
+
+model ActivityConnection {
+  id           String   @id @default(cuid())
+  terraUserId  String   @unique  // Terra's internal user ID
+  provider     String   @default("GARMIN")
+  connectedAt  DateTime @default(now())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DailyActivity {
+  id               String   @id @default(cuid())
+  date             DateTime @db.Date
+  steps            Int?
+  activeKcal       Int?     // calories from movement only
+  bmrKcal          Int?     // basal metabolic rate
+  totalKcal        Int?     // activeKcal + bmrKcal
+  heartRateAvg     Int?
+  heartRateResting Int?
+  activeMinutes    Int?     // moderate + vigorous intensity minutes
+  stressAvg        Int?     // 0–100 Garmin stress score
+  source           String   @default("GARMIN")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
 }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarDays, ChefHat, ShoppingCart, Target, UtensilsCrossed } from 'lucide-react'
+import { CalendarDays, ChefHat, ShoppingCart, Settings, Target, UtensilsCrossed } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { href: '/recipes', label: 'Recipes', icon: ChefHat },
   { href: '/grocery-list', label: 'Grocery List', icon: ShoppingCart },
   { href: '/goals', label: 'Macro Goals', icon: Target },
+  { href: '/settings/integrations', label: 'Integrations', icon: Settings },
 ]
 
 export function Sidebar() {

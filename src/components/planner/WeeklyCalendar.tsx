@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/button'
 import { MealSlot } from './MealSlot'
 import { AddMealDialog } from './AddMealDialog'
 import { DayMacroSummary } from './DayMacroSummary'
+import { ActivityWidget } from '@/components/activity/ActivityWidget'
+import { computeDayNutrition } from '@/lib/utils/macroFit'
+import { useGoals } from '@/hooks/useGoals'
 import { formatWeekRange, getWeekDays, toISODate, formatDayLabel, getWeekStart, fromISODate } from '@/lib/utils/date'
 import { addMealEntry, createMealPlan, removeMealEntry } from '@/lib/api/meal-plans'
 import type { WeeklyPlan, MealType } from '@/types'
@@ -29,6 +32,7 @@ interface WeeklyCalendarProps {
 export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyCalendarProps) {
   const [plan, setPlan] = useState<WeeklyPlan | null>(initialPlan)
   const [selectedDate, setSelectedDate] = useState<string>(toISODate(new Date()))
+  const { data: goals } = useGoals()
   const [dialogState, setDialogState] = useState<{
     open: boolean
     date: string
@@ -187,6 +191,15 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
 
       {/* Daily macro progress for selected day */}
       <DayMacroSummary plan={plan} selectedDate={selectedDate} />
+
+      {/* Garmin activity for selected day */}
+      <ActivityWidget
+        date={selectedDate}
+        caloriesConsumed={
+          plan ? computeDayNutrition(plan.entries, selectedDate).calories : undefined
+        }
+        calorieGoal={goals?.calories ?? undefined}
+      />
 
       {/* Empty state */}
       {!plan && (
