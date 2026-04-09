@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { Header } from '@/components/layout/Header'
 import { GroceryList } from '@/components/grocery/GroceryList'
 import { GroceryListSelector } from './GroceryListSelector'
+import { isInstacartConfigured } from '@/lib/integrations/instacart'
 import { getWeekStart, toISODate } from '@/lib/utils/date'
 import type { GroceryItem, GroceryList as GroceryListType } from '@/types'
 
@@ -126,6 +127,7 @@ export default async function GroceryListPage({
 
   const totalItems = groceryList?.sections.reduce((sum, s) => sum + s.items.length, 0) ?? 0
   const activePlanId = params.planId ?? plans[0]?.id
+  const instacartEnabled = isInstacartConfigured()
 
   return (
     <div>
@@ -149,7 +151,7 @@ export default async function GroceryListPage({
         </div>
 
         {groceryList && groceryList.sections.length > 0 ? (
-          <GroceryList groceryList={groceryList} />
+          <GroceryList groceryList={groceryList} instacartEnabled={instacartEnabled} />
         ) : (
           <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
             {plans.length === 0 ? (
