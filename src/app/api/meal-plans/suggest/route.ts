@@ -8,6 +8,58 @@ import type { NutritionSummary, UserGoals, MealType } from '@/types'
 
 const MEAL_TYPES: MealType[] = ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK']
 
+// ── Meal-type classification ───────────────────────────────────────────────────
+// Keywords that strongly indicate a recipe belongs to a specific meal type.
+// Checked against a lowercase join of the recipe title + tags.
+
+const BREAKFAST_KEYWORDS = [
+  'breakfast', 'brunch', 'pancake', 'waffle', 'french toast', 'oat', 'granola',
+  'muesli', 'porridge', 'smoothie bowl', 'acai bowl', 'frittata', 'omelette',
+  'omelet', 'scrambled', 'eggs benedict', 'hash brown', 'breakfast burrito',
+  'breakfast sandwich', 'breakfast bowl', 'morning', 'crepe', 'muffin',
+  'overnight', 'yogurt parfait', 'yoghurt parfait',
+]
+
+const SNACK_KEYWORDS = [
+  'snack', 'energy ball', 'protein ball', 'trail mix', 'granola bar', 'protein bar',
+  'bites', 'hummus', 'guacamole', 'salsa', 'dip', 'chips', 'popcorn',
+  'bruschetta', 'deviled egg', 'stuffed mushroom', 'appetizer', 'finger food',
+]
+
+/**
+ * Returns the set of MealTypes a recipe is suitable for, inferred from its
+ * title and tags. Errs on the side of inclusion rather than exclusion:
+ * - Clear breakfast food → BREAKFAST + SNACK (not lunch/dinner)
+ * - Clear snack food    → SNACK (+ LUNCH for light snacks)
+ * - Everything else     → LUNCH + DINNER (the safe default)
+ */
+function suitableMealTypes(title: string, tags: string[]): Set<MealType> {
+  const text = `${title} ${tags.join(' ')}`.toLowerCase()
+
+  const isBreakfast = BREAKFAST_KEYWORDS.some((k) => text.includes(k))
+  const isSnack = SNACK_KEYWORDS.some((k) => text.includes(k))
+
+  const types = new Set<MealType>()
+
+  if (isBreakfast) {
+    types.add('BREAKFAST')
+    types.add('SNACK') // breakfast foods double as snacks (granola, muffin, etc.)
+    return types
+  }
+
+  if (isSnack) {
+    types.add('SNACK')
+    // Light snacks (dips, bites) work as a light lunch side; skip dinner
+    return types
+  }
+
+  // Default: suitable for any main meal
+  types.add('LUNCH')
+  types.add('DINNER')
+
+  return types
+}
+
 const ZERO_NUTRITION: NutritionSummary = {
   calories: 0,
   proteinG: 0,
@@ -78,6 +130,7 @@ export async function POST(req: Request) {
     select: {
       id: true,
       title: true,
+      tags: true,
       servings: true,
       scrapedCalories: true,
       scrapedProteinG: true,
@@ -116,8 +169,12 @@ export async function POST(req: Request) {
     )
   }
 
-  // ── 4. Resolve per-serving nutrition for each recipe ───────────────────────
-  type ScoredRecipe = { id: string; nutrition: NutritionSummary }
+  // ── 4. Resolve per-serving nutrition + meal-type suitability ─────────────────
+  type ScoredRecipe = {
+    id: string
+    nutrition: NutritionSummary
+    suitableFor: Set<MealType>
+  }
 
   const recipes: ScoredRecipe[] = dbRecipes.map((r) => {
     const calculated = calculateRecipeNutrition(
@@ -125,7 +182,6 @@ export async function POST(req: Request) {
       r.servings
     )
 
-    // Fall back to scraped data if ingredient-based calculation has no data
     const hasIngredientData = calculated.calories > 0 || calculated.proteinG > 0
     const nutrition: NutritionSummary = hasIngredientData
       ? calculated
@@ -138,7 +194,7 @@ export async function POST(req: Request) {
           perServing: true,
         }
 
-    return { id: r.id, nutrition }
+    return { id: r.id, nutrition, suitableFor: suitableMealTypes(r.title, r.tags) }
   })
 
   // Prefer recipes with actual nutrition data; fall back to all if none have data
@@ -161,10 +217,18 @@ export async function POST(req: Request) {
     const usedToday = new Set<string>()
 
     for (const mealType of MEAL_TYPES) {
-      // Score candidates not already used today; fall back to all if needed
+      // Filter by meal-type suitability first, then exclude already-used-today recipes.
+      // Fallback chain: suitable+unused → suitable (allow repeat today) → all unused → all
+      const suitable = candidates.filter((r) => r.suitableFor.has(mealType))
+      const suitableUnused = suitable.filter((r) => !usedToday.has(r.id))
+      const allUnused = candidates.filter((r) => !usedToday.has(r.id))
       const pool =
-        candidates.filter((r) => !usedToday.has(r.id)).length > 0
-          ? candidates.filter((r) => !usedToday.has(r.id))
+        suitableUnused.length > 0
+          ? suitableUnused
+          : suitable.length > 0
+          ? suitable
+          : allUnused.length > 0
+          ? allUnused
           : candidates
 
       const best = pool
