@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, ShoppingCart } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ShoppingCart, Sparkles, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MealSlot } from './MealSlot'
 import { AddMealDialog } from './AddMealDialog'
@@ -38,6 +38,8 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
     date: string
     mealType: MealType
   } | null>(null)
+  const [suggesting, setSuggesting] = useState(false)
+  const [suggestError, setSuggestError] = useState<string | null>(null)
 
   const weekStartDate = fromISODate(weekStart)
   const days = getWeekDays(weekStartDate)
@@ -81,6 +83,34 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
     }
   }
 
+  const handleSuggest = async () => {
+    if (
+      plan &&
+      plan.entries.length > 0 &&
+      !confirm('This will replace your current meal plan for this week. Continue?')
+    )
+      return
+
+    setSuggesting(true)
+    setSuggestError(null)
+    try {
+      const res = await fetch('/api/meal-plans/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ weekStart }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to generate suggestion')
+      // Refresh the plan
+      const planRes = await fetch(`/api/meal-plans?weekStart=${weekStart}`)
+      if (planRes.ok) setPlan(await planRes.json())
+    } catch (err) {
+      setSuggestError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
   const handleRemove = async (entryId: string) => {
     if (!plan) return
     try {
@@ -111,6 +141,19 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
         </Button>
         <span className="font-medium">{formatWeekRange(weekStartDate)}</span>
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={handleSuggest}
+            disabled={suggesting}
+            className="gap-1.5"
+          >
+            {suggesting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Suggest Weekly Plan
+          </Button>
           {plan && plan.entries.length > 0 && (
             <Button variant="outline" size="sm" asChild>
               <Link href={`/grocery-list?planId=${plan.id}`}>
@@ -124,6 +167,13 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
           </Button>
         </div>
       </div>
+
+      {/* Suggest error */}
+      {suggestError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+          {suggestError}
+        </div>
+      )}
 
       {/* Calendar grid */}
       <div className="overflow-x-auto">
@@ -203,8 +253,12 @@ export function WeeklyCalendar({ initialPlan, weekStart, onWeekChange }: WeeklyC
 
       {/* Empty state */}
       {!plan && (
-        <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          No meal plan for this week. Click + on any cell to get started.
+        <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground space-y-2">
+          <p>No meal plan for this week.</p>
+          <p className="text-xs">
+            Click <strong>Suggest Weekly Plan</strong> to auto-fill based on your macro goals, or
+            click <strong>+</strong> on any cell to add meals manually.
+          </p>
         </div>
       )}
 
